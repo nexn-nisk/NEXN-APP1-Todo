@@ -124,18 +124,48 @@ class _TodoAppState extends State<TodoApp> {
     _saveDarkMode();
   }
 
+  int get _completedCount =>
+      _todos.where((TodoItem t) => t.isDone).length;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'To-Do',
       theme: ThemeData(
         useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.indigo,
+          brightness: _isDarkMode ? Brightness.dark : Brightness.light,
+        ),
         brightness: _isDarkMode ? Brightness.dark : Brightness.light,
       ),
       home: Scaffold(
         appBar: AppBar(
-          title: const Text('To-Do'),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text('📝 To-Do'),
+              if (_todos.isNotEmpty)
+                Text(
+                  '$_completedCount of ${_todos.length} done',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                ),
+            ],
+          ),
           actions: <Widget>[
+            if (_completedCount > 0)
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _todos.removeWhere((TodoItem t) => t.isDone);
+                  });
+                  _saveTasks();
+                },
+                child: const Text('Clear completed'),
+              ),
             IconButton(
               onPressed: _toggleDarkMode,
               icon: Icon(
@@ -154,23 +184,35 @@ class _TodoAppState extends State<TodoApp> {
                       itemCount: _todos.length,
                       itemBuilder: (BuildContext context, int index) {
                         final TodoItem todo = _todos[index];
-                        return ListTile(
-                          leading: Checkbox(
-                            value: todo.isDone,
-                            onChanged: (bool? value) => _toggleTask(index, value),
-                          ),
-                          title: Text(
-                            todo.title,
-                            style: TextStyle(
-                              decoration: todo.isDone
-                                  ? TextDecoration.lineThrough
-                                  : TextDecoration.none,
+                        return Column(
+                          children: <Widget>[
+                            ListTile(
+                              leading: Checkbox(
+                                value: todo.isDone,
+                                onChanged: (bool? value) =>
+                                    _toggleTask(index, value),
+                              ),
+                              title: Text(
+                                todo.title,
+                                style: TextStyle(
+                                  decoration: todo.isDone
+                                      ? TextDecoration.lineThrough
+                                      : TextDecoration.none,
+                                  color: todo.isDone
+                                      ? Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withOpacity(0.5)
+                                      : null,
+                                ),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: () => _deleteTask(index),
+                              ),
                             ),
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () => _deleteTask(index),
-                          ),
+                            const Divider(height: 0),
+                          ],
                         );
                       },
                     ),
