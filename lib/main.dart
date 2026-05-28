@@ -1,122 +1,209 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const TodoApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class TodoItem {
+  TodoItem({
+    required this.title,
+    this.isDone = false,
+  });
 
-  // This widget is the root of your application.
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+  final String title;
+  bool isDone;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'title': title,
+      'isDone': isDone,
+    };
+  }
+
+  factory TodoItem.fromJson(Map<String, dynamic> json) {
+    return TodoItem(
+      title: (json['title'] as String?) ?? '',
+      isDone: (json['isDone'] as bool?) ?? false,
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class TodoApp extends StatefulWidget {
+  const TodoApp({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<TodoApp> createState() => _TodoAppState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _TodoAppState extends State<TodoApp> {
+  static const String _tasksKey = 'tasks';
+  static const String _darkModeKey = 'darkMode';
 
-  void _incrementCounter() {
+  final List<TodoItem> _todos = <TodoItem>[];
+  final TextEditingController _controller = TextEditingController();
+  bool _isDarkMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedData();
+  }
+
+  Future<void> _loadSavedData() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final List<String> storedTasks = prefs.getStringList(_tasksKey) ?? <String>[];
+    final bool storedDarkMode = prefs.getBool(_darkModeKey) ?? false;
+
+    final List<TodoItem> parsedTodos = storedTasks
+        .map(
+          (String raw) =>
+              TodoItem.fromJson(jsonDecode(raw) as Map<String, dynamic>),
+        )
+        .toList();
+
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _todos
+        ..clear()
+        ..addAll(parsedTodos);
+      _isDarkMode = storedDarkMode;
     });
+  }
+
+  Future<void> _saveTasks() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final List<String> serialized = _todos
+        .map((TodoItem item) => jsonEncode(item.toJson()))
+        .toList();
+    await prefs.setStringList(_tasksKey, serialized);
+  }
+
+  Future<void> _saveDarkMode() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_darkModeKey, _isDarkMode);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _addTask() {
+    final String text = _controller.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _todos.add(TodoItem(title: text));
+    });
+    _controller.clear();
+    _saveTasks();
+  }
+
+  void _toggleTask(int index, bool? value) {
+    setState(() {
+      _todos[index].isDone = value ?? false;
+    });
+    _saveTasks();
+  }
+
+  void _deleteTask(int index) {
+    setState(() {
+      _todos.removeAt(index);
+    });
+    _saveTasks();
+  }
+
+  void _toggleDarkMode() {
+    setState(() {
+      _isDarkMode = !_isDarkMode;
+    });
+    _saveDarkMode();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+    return MaterialApp(
+      title: 'To-Do',
+      theme: ThemeData(
+        useMaterial3: true,
+        brightness: _isDarkMode ? Brightness.dark : Brightness.light,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
+      home: Scaffold(
+        appBar: AppBar(
+          title: const Text('To-Do'),
+          actions: <Widget>[
+            IconButton(
+              onPressed: _toggleDarkMode,
+              icon: Icon(
+                _isDarkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+              ),
+              tooltip: _isDarkMode ? 'Light mode' : 'Dark mode',
+            ),
+          ],
+        ),
+        body: Column(
           children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            Expanded(
+              child: _todos.isEmpty
+                  ? const Center(child: Text('No tasks yet'))
+                  : ListView.builder(
+                      itemCount: _todos.length,
+                      itemBuilder: (BuildContext context, int index) {
+                        final TodoItem todo = _todos[index];
+                        return ListTile(
+                          leading: Checkbox(
+                            value: todo.isDone,
+                            onChanged: (bool? value) => _toggleTask(index, value),
+                          ),
+                          title: Text(
+                            todo.title,
+                            style: TextStyle(
+                              decoration: todo.isDone
+                                  ? TextDecoration.lineThrough
+                                  : TextDecoration.none,
+                            ),
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => _deleteTask(index),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        onSubmitted: (_) => _addTask(),
+                        decoration: const InputDecoration(
+                          hintText: 'Add a task',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _addTask,
+                      child: const Text('Add'),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
